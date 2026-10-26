@@ -23,8 +23,10 @@ PORT = 5000
 
 # ====== ИНИЦИАЛИЗАЦИЯ ======
 app = Flask(__name__)
-CORS(app)  # Разрешаем запросы с любого домена (для локальной разработки)
-
+CORS(app, origins=[
+    "https://localrouters.netlify.app",  # ваш Netlify-домен
+    "http://localhost:5500"  # для локальной разработки
+])
 # Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
