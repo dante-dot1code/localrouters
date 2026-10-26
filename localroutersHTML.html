@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Городские тропы — автоматическая платформа для создания маршрутов по городу с учётом ваших интересов, времени и бюджета." />
+    <title>Городские тропы — маршрут по городу за 30 секунд</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            },
+            animation: {
+              'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'slide-up': 'slideUp 0.5s ease-out forwards',
+            },
+            keyframes: {
+              slideUp: {
+                '0%': { opacity: '0', transform: 'translateY(20px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              }
+            }
+          }
+        }
+      }
+    </script>
+
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+      html, body { margin: 0; padding: 0; }
+      html { scroll-behavior: smooth; scroll-padding-top: 5rem; }
+      ::-webkit-scrollbar { width: 8px; }
+      ::-webkit-scrollbar-track { background: #f1f5f9; }
+      ::-webkit-scrollbar-thumb { background: #10b981; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: #059669; }
+      select {
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='%236b7280'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 1rem center;
+        padding-right: 2.5rem;
+      }
+      *:focus-visible { outline: 2px solid #10b981; outline-offset: 2px; border-radius: 4px; }
+      body { overflow-x: hidden; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect } = React;
+
+      // ====== БАЗА ДАННЫХ ДЛЯ ДЕМО-РЕЖИМА ======
+      const routeDatabase = {
+        "Ростов-на-Дону": {
+          history: {
+            free: { title: "Тайны купеческого Ростова", distance: "2.5 км", points: [{ emoji: "🏛️", name: "Старый базар", desc: "Сердце старого города, атмосфера 19 века" }, { emoji: "🏰", name: "Особняк Петровой", desc: "Великолепная архитектура снаружи (бесплатный осмотр)" }, { emoji: "🌊", name: "Набережная Дона", desc: "Прогулка к речному вокзалу" }], tip: "Начинайте с утра: на Большой Садовой будет меньше людей, а свет для фото особняка лучше до 11:00." },
+            medium: { title: "Ростов с вкусом и историей", distance: "3.0 км", points: [{ emoji: "🏛️", name: "Старый базар", desc: "Экскурсия по историческим улочкам" }, { emoji: "☕", name: "Кофейня «Пятая авеню»", desc: "Авторский раф и тихий дворик" }, { emoji: "🏰", name: "Особняк Петровой", desc: "Билет с аудиогидом по парадным залам" }, { emoji: "🌊", name: "Набережная Дона", desc: "Закат у реки" }], tip: "Билет с аудиогидом в особняк Петровой лучше брать онлайн, это сэкономит 15 минут в очереди." },
+            premium: { title: "VIP-прогулка по донской столице", distance: "2.0 км", points: [{ emoji: "🥂", name: "Завтрак в «Империи»", desc: "Панорамный вид на город и авторская кухня" }, { emoji: "🚗", name: "Трансфер к Особняку Петровой", desc: "Индивидуальная экскурсия с историком" }, { emoji: "🍷", name: "Винный бар «Брюква»", desc: "Дегустация локальных вин и сыров" }], tip: "Мы зарезервировали для вас столик у окна. Подтвердите бронь за 2 часа до визита." }
+          },
+          food: {
+            medium: { title: "Гастрономический Ростов", distance: "2.8 км", points: [{ emoji: "🥐", name: "Пекарня «Хлеб & Соль»", desc: "Свежие круассаны и донской джем" }, { emoji: "🥟", name: "Рынок «Темерник»", desc: "Дегустация фермерских сыров и раков" }, { emoji: "🍲", name: "Ресторан «Раки и Гады»", desc: "Легендарная донская уха" }], tip: "На рынке «Темерник» лучше всего пробовать сыры у продавцов в красных фартуках — это самые старые сыровары." }
+          },
+          photo: {
+            free: { title: "Инстаграм-Ростов", distance: "3.5 км", points: [{ emoji: "🎨", name: "Стрит-арт на ул. Шаумяна", desc: "Самые яркие муралы города" }, { emoji: "🌉", name: "Зеленый остров", desc: "Мост и виды на центр с воды" }, { emoji: "🌅", name: "Смотровая у речного вокзала", desc: "Идеальный ракурс на закат" }], tip: "Свет на смотровой площадке лучший за 40 минут до заката, мы поставили эту точку именно на это время." }
+          },
+          nature: {
+            free: { title: "Зеленый оазис Ростова", distance: "4.0 км", points: [{ emoji: "🌳", name: "Парк им. Горького", desc: "Тихие аллеи и пруд с лебедями" }, { emoji: "🌿", name: "Ботанический сад ЮФУ", desc: "Редкие растения и оранжерея" }], tip: "В Ботаническом саду в выходные много людей, будний день до 12:00 — идеальное время для тишины." }
+          }
+        },
+        "Москва": {
+          history: {
+            medium: { title: "Тайны старой Москвы", distance: "3.0 км", points: [{ emoji: "🏰", name: "Зарядье", desc: "Парящий мост и виды на Кремль" }, { emoji: "☕", name: "Кафе «Дрифтер»", desc: "Спешелти кофе в историческом здании" }, { emoji: "🏛️", name: "Музей Москвы", desc: "Интерактивная история города" }], tip: "В Музей Москвы лучше приходить к открытию, чтобы спокойно сделать фото без толп." }
+          },
+          food: {
+            premium: { title: "Гастрономический трип по центру", distance: "2.5 км", points: [{ emoji: "🥐", name: "Завтрак в «Кафе Пушкинъ»", desc: "Классическая русская кухня в интерьере дворца" }, { emoji: "🥗", name: "Прогулка по Патриаршим прудам", desc: "Модные бутики и атмосфера" }, { emoji: "🍷", name: "Ужин в «White Rabbit»", desc: "Панорамный вид и высокая кухня" }], tip: "Бронь в топовые места уже учтена в тайминге, но лучше подтвердить её за 2 часа." }
+          },
+          photo: {
+            free: { title: "Открыточная Москва без толп", distance: "4.0 км", points: [{ emoji: "🏛️", name: "Дворы-колодцы Мясницкой", desc: "Скрытая архитектура и тишина" }, { emoji: "🌉", name: "Патриарший мост", desc: "Лучший вид на Храм Христа Спасителя" }, { emoji: "🌅", name: "Воробьевы горы", desc: "Классическая панорама Москвы" }], tip: "На Патриарший мост лучше подниматься со стороны метро Кропоткинская, там меньше всего людей." }
+          },
+          nature: {
+            free: { title: "Москва парковая", distance: "3.5 км", points: [{ emoji: "🌳", name: "Аптекарский огород", desc: "Самый старый ботанический сад" }, { emoji: "🦆", name: "Екатерининский парк", desc: "Тихие пруды и уединенные беседки" }], tip: "В Аптекарском огороде сейчас цветут орхидеи, не пропустите оранжерею." }
+          }
+        },
+        "Санкт-Петербург": {
+          history: {
+            medium: { title: "Имперский Петербург", distance: "3.2 км", points: [{ emoji: "🏛️", name: "Новая Голландия", desc: "Историческая реконструкция и уют" }, { emoji: "☕", name: "Кофейня «Север-Метр»", desc: "Лучший кофе в историческом центре" }, { emoji: "🏰", name: "Юсуповский дворец", desc: "Роскошные интерьеры и мистическая история" }], tip: "В Юсуповский дворец берите билет с аудиогидом, история убийства Распутина оживает с ним по-новому." }
+          },
+          food: {
+            medium: { title: "Вкусы Петербурга", distance: "2.5 км", points: [{ emoji: "🥟", name: "Пышечная на Конюшенной", desc: "Легендарные пышки с советских времен" }, { emoji: "🐟", name: "Сенной рынок", desc: "Свежие морские деликатесы" }, { emoji: "🍰", name: "Кондитерская «Лакомка»", desc: "Торт «Ленинградский» по ГОСТу" }], tip: "В пышечную лучше идти до 11:00 или после 15:00, чтобы избежать огромных очередей." }
+          },
+          photo: {
+            free: { title: "Фотогеничный Петербург", distance: "3.0 км", points: [{ emoji: "🎨", name: "Дворы-колодцы на Рубинштейна", desc: "Атмосфера старого Петербурга" }, { emoji: "🌉", name: "Смотровая у Исаакия", desc: "Легальный вид на колоннаду" }, { emoji: "🌅", name: "Стрелка Васильевского острова", desc: "Классический вид на закате" }], tip: "Свет для фото у Исаакия лучший за час до заката, мы поставили эту точку именно на это время." }
+          },
+          nature: {
+            free: { title: "Зеленый Петербург", distance: "4.5 км", points: [{ emoji: "🌳", name: "Таврический сад", desc: "Спокойствие и красивые мостики" }, { emoji: "🌿", name: "Елагин остров", desc: "Просторные лужайки и вид на Финский залив" }], tip: "На Елагин остров можно взять напрокат велосипед, это ускорит прогулку и добавит эмоций." }
+          }
+        }
+      };
+
+      const getFallbackRoute = (city, interest, budget) => {
+        return {
+          title: `Персональный маршрут по г. ${city}`,
+          distance: "2.5 - 3.5 км",
+          points: [
+            { emoji: "📍", name: "Центральная площадь", desc: "Отличная точка для начала и ориентации на местности" },
+            { emoji: "☕", name: "Локальная кофейня", desc: "Место, где можно передохнуть и попробовать региональные десерты" },
+            { emoji: "🏛️", name: "Скрытая архитектурная жемчужина", desc: "Место, о котором не пишут в обычных путеводителях" },
+            { emoji: "🌅", name: "Смотровая площадка", desc: "Идеальное место для завершения прогулки и фотографий" }
+          ],
+          tip: `Для города ${city} мы рекомендуем начинать прогулку до 12:00, чтобы избежать основного потока туристов и насладиться атмосферой.`
+        };
+      };
+
+      const problems = [
+        { emoji: '🧩', title: 'Разрозненная информация', text: 'Блоги, карты, отзывы — всё в разных местах. Тратишь часы, собирая маршрут.' },
+        { emoji: '⏰', title: 'Нехватка времени', text: 'Приехал на день-два — и не знаешь, как успеть главное без хаоса.' },
+        { emoji: '☕', title: 'Нет точек отдыха', text: 'Гуляешь 3 часа без единого места, где можно нормально передохнуть.' },
+        { emoji: '📸', title: 'Только «открыточные» места', text: 'Все ходят по одним и тем же точкам, а жемчужины города остаются в стороне.' },
+      ];
+
+      const steps = [
+        {
+          num: '01',
+          emoji: '🎯',
+          title: 'Задаёшь параметры',
+          text: 'Время, бюджет, интересы, темп, с кем идёшь — всё за 30 секунд.',
+        },
+        {
+          num: '02',
+          emoji: '🗺️',
+          title: 'Получаешь маршрут',
+          text: 'Алгоритм строит оптимальный путь с точками еды, отдыха и скрытыми жемчужинами.',
+        },
+        {
+          num: '03',
+          emoji: '🚶',
+          title: 'Идёшь и кайфуешь',
+          text: 'Просто следуй маршруту. Никаких споров, никакого стресса — только удовольствие.',
+        },
+      ];
+
+      const demoInterests = [
+        { id: 'history', emoji: '🏛️', label: 'История' },
+        { id: 'food', emoji: '🍔', label: 'Еда' },
+        { id: 'photo', emoji: '📸', label: 'Фото' },
+        { id: 'nature', emoji: '🌳', label: 'Природа' },
+      ];
+
+      const demoBudgets = [
+        { id: 'free', label: 'Бесплатно', color: 'bg-green-100 text-green-700 border-green-200' },
+        { id: 'medium', label: 'Средний', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+        { id: 'premium', label: 'Премиум', color: 'bg-amber-100 text-amber-700 border-amber-200' },
+      ];
+
+      // URL backend (измените на ваш домен при деплое)
+      const API_URL = 'http://localhost:5000';
+
+      function App() {
+        const [formData, setFormData] = useState({ name: '', contact: '', city: '', frequency: '' });
+        const [errors, setErrors] = useState({});
+        const [isSubmitted, setIsSubmitted] = useState(false);
+        const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+        const [demoStep, setDemoStep] = useState('input');
+        const [demoParams, setDemoParams] = useState({ city: 'Ростов-на-Дону', duration: '2 часа', interest: 'history', budget: 'medium' });
+        const [loadingText, setLoadingText] = useState('Анализируем карту...');
+        const [demoResult, setDemoResult] = useState(null);
+
+        useEffect(() => {
+          const handleClick = (e) => {
+            const anchor = e.target.closest('a[href^="#"]');
+            if (anchor) {
+              e.preventDefault();
+              const id = anchor.getAttribute('href')?.slice(1);
+              if (id) {
+                document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                setMobileMenuOpen(false);
+              }
+            }
+          };
+          document.addEventListener('click', handleClick);
+          return () => document.removeEventListener('click', handleClick);
+        }, []);
+
+        const startDemoGeneration = () => {
+          setDemoStep('loading');
+          const texts = [
+            `Сканируем локации в г. ${demoParams.city}...`, 
+            `Фильтруем по бюджету: ${demoBudgets.find(b => b.id === demoParams.budget)?.label}...`, 
+            'Оптимизируем пешеходный путь...', 
+            'Добавляем скрытые жемчужины...'
+          ];
+          let step = 0;
+          const interval = setInterval(() => {
+            setLoadingText(texts[step]);
+            step++;
+            if (step >= texts.length) clearInterval(interval);
+          }, 700);
+
+          setTimeout(() => {
+            const cityData = routeDatabase[demoParams.city];
+            let route = null;
+            
+            if (cityData && cityData[demoParams.interest] && cityData[demoParams.interest][demoParams.budget]) {
+              route = cityData[demoParams.interest][demoParams.budget];
+            } else if (cityData && cityData[demoParams.interest]) {
+              route = cityData[demoParams.interest]['medium'] || Object.values(cityData[demoParams.interest])[0];
+            } else {
+              route = getFallbackRoute(demoParams.city, demoParams.interest, demoParams.budget);
+            }
+
+            let pointsToShow = route.points;
+            if (demoParams.duration === '1 час') pointsToShow = route.points.slice(0, 2);
+            else if (demoParams.duration === '2 часа') pointsToShow = route.points.slice(0, 3);
+            
+            const budgetMod = demoParams.budget === 'premium' ? ' (VIP-локации)' : demoParams.budget === 'free' ? ' (только бесплатные активности)' : '';
+
+            setDemoResult({
+              ...route,
+              title: route.title + budgetMod,
+              points: pointsToShow,
+              saved: demoParams.budget === 'premium' ? 'максимум комфорта' : 'до 20% бюджета'
+            });
+            setDemoStep('result');
+
+            // ====== ОТПРАВКА СТАТИСТИКИ ДЕМО НА BACKEND ======
+            fetch(`${API_URL}/api/demo-stats`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                city: demoParams.city,
+                duration: demoParams.duration,
+                interest: demoParams.interest,
+                budget: demoParams.budget,
+              }),
+            }).catch(err => console.log('Статистика демо не отправлена:', err));
+          }, 2800);
+        };
+
+        const resetDemo = () => {
+          setDemoStep('input');
+          setDemoResult(null);
+        };
+
+        const validate = () => {
+          const newErrors = {};
+          if (!formData.name.trim()) newErrors.name = 'Укажите имя';
+          if (!formData.contact.trim()) newErrors.contact = 'Укажите email или Telegram';
+          if (!formData.city) newErrors.city = 'Выберите город';
+          return newErrors;
+        };
+
+        // ====== ОТПРАВКА ЛИДА НА BACKEND ======
+        const handleSubmit = async (e) => {
+          e.preventDefault();
+          const newErrors = validate();
+          if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
+            return;
+          }
+          setErrors({});
+
+          try {
+            const response = await fetch(`${API_URL}/api/leads`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(formData),
+            });
+
+            if (!response.ok) {
+              const err = await response.json();
+              alert('Ошибка: ' + (err.error || 'Попробуйте позже'));
+              return;
+            }
+
+            console.log('✅ Лид сохранён:', await response.json());
+            setIsSubmitted(true);
+          } catch (err) {
+            console.error('Ошибка отправки:', err);
+            // Если backend недоступен — всё равно показываем "спасибо"
+            setIsSubmitted(true);
+          }
+        };
+
+        const handleChange = (e) => {
+          const { name, value } = e.target;
+          setFormData(prev => ({ ...prev, [name]: value }));
+          if (errors[name]) setErrors(prev => { const c = { ...prev }; delete c[name]; return c; });
+        };
+
+        return (
+          <div className="min-h-screen bg-white font-sans text-gray-900">
+            {/* НАВИГАЦИЯ */}
+            <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-100">
+              <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex items-center justify-between h-16">
+                  <a href="#hero" className="flex items-center gap-2 font-bold text-lg">
+                    <span className="text-2xl">🌿</span>
+                    <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">Городские тропы</span>
+                  </a>
+                  <div className="hidden md:flex items-center gap-6">
+                    <a href="#demo" className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">Демо</a>
+                    <a href="#how" className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">Как работает</a>
+                    <a href="#form" className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-full hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200">Ранний доступ</a>
+                  </div>
+                  <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden p-2 text-gray-600" aria-label="Меню">
+                    {mobileMenuOpen ? '✕' : '☰'}
+                  </button>
+                </div>
+                {mobileMenuOpen && (
+                  <div className="md:hidden pb-4 border-t border-gray-100 pt-4 flex flex-col gap-3">
+                    <a href="#demo" className="text-gray-600 hover:text-emerald-600">Демо</a>
+                    <a href="#how" className="text-gray-600 hover:text-emerald-600">Как работает</a>
+                    <a href="#form" className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-full text-center">Ранний доступ</a>
+                  </div>
+                )}
+              </div>
+            </nav>
+
+            {/* HERO СЕКЦИЯ */}
+            <section id="hero" className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 via-teal-50 to-amber-50" />
+              <div className="absolute top-20 right-10 w-72 h-72 bg-emerald-200/30 rounded-full blur-3xl animate-pulse-slow" />
+              <div className="absolute bottom-20 left-10 w-96 h-96 bg-amber-200/20 rounded-full blur-3xl" />
+              
+              <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 text-center py-20">
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/70 backdrop-blur-sm rounded-full border border-emerald-200 mb-8 shadow-sm">
+                  <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                  <span className="text-sm text-emerald-700 font-medium">Скоро запуск • Ростов-на-Дону</span>
+                </div>
+
+                <h1 className="text-4xl sm:text-5xl md:text-7xl font-black leading-tight mb-6">
+                  <span className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 bg-clip-text text-transparent">Маршрут по городу</span>
+                  <br />
+                  <span className="bg-gradient-to-r from-emerald-600 to-teal-500 bg-clip-text text-transparent">за 30 секунд</span>
+                </h1>
+
+                <p className="text-lg sm:text-xl md:text-2xl text-gray-600 max-w-2xl mx-auto mb-10 leading-relaxed">
+                  Не просто теория. Попробуйте прямо сейчас: выберите параметры, и наш алгоритм построит для вас идеальный маршрут с точками отдыха и скрытыми жемчужинами.
+                </p>
+
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                  <a href="#demo" className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-lg rounded-2xl hover:from-emerald-700 hover:to-teal-700 transition-all shadow-xl shadow-emerald-200 hover:shadow-2xl hover:-translate-y-0.5">
+                    Попробовать демо бесплатно 🚀
+                  </a>
+                  <a href="#how" className="w-full sm:w-auto px-8 py-4 bg-white/80 backdrop-blur-sm text-gray-700 font-semibold text-lg rounded-2xl border border-gray-200 hover:border-emerald-300 hover:text-emerald-700 transition-all">
+                    Как это работает?
+                  </a>
+                </div>
+              </div>
+
+              <div className="absolute bottom-0 left-0 right-0">
+                <svg viewBox="0 0 1440 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full">
+                  <path d="M0 50L48 45C96 40 192 30 288 35C384 40 480 60 576 65C672 70 768 60 864 50C960 40 1056 30 1152 35C1248 40 1344 60 1392 70L1440 80V100H1392C1344 100 1248 100 1152 100C1056 100 960 100 864 100C768 100 672 100 576 100C480 100 384 100 288 100C192 100 96 100 48 100H0V50Z" fill="white"/>
+                </svg>
+              </div>
+            </section>
+
+            {/* ИНТЕРАКТИВНОЕ ДЕМО */}
+            <section id="demo" className="py-20 sm:py-28 bg-gray-50">
+              <div className="max-w-4xl mx-auto px-4 sm:px-6">
+                <div className="text-center mb-12">
+                  <span className="text-sm font-semibold text-emerald-600 uppercase tracking-wider">Интерактивный режим</span>
+                  <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-4">Посмотрите, как это работает</h2>
+                  <p className="text-gray-600 text-lg max-w-2xl mx-auto">Настройте параметры ниже и нажмите «Построить маршрут». Алгоритм подберет реальные места под ваш запрос.</p>
+                </div>
+
+                <div className="bg-white rounded-3xl shadow-xl shadow-gray-200/50 border border-gray-100 overflow-hidden">
+                  {demoStep === 'input' && (
+                    <div className="p-6 sm:p-10 animate-slide-up">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Город</label>
+                          <select value={demoParams.city} onChange={e => setDemoParams({...demoParams, city: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
+                            <option>Ростов-на-Дону</option>
+                            <option>Москва</option>
+                            <option>Санкт-Петербург</option>
+                            <option>Краснодар</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Сколько времени есть?</label>
+                          <select value={demoParams.duration} onChange={e => setDemoParams({...demoParams, duration: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
+                            <option>1 час</option>
+                            <option>2 часа</option>
+                            <option>Полдня (4 часа)</option>
+                            <option>Весь день</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="mb-8">
+                        <label className="block text-sm font-semibold text-gray-700 mb-3">Что вам интереснее всего?</label>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          {demoInterests.map(item => (
+                            <button
+                              key={item.id}
+                              onClick={() => setDemoParams({...demoParams, interest: item.id})}
+                              className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                                demoParams.interest === item.id 
+                                  ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
+                                  : 'border-gray-100 hover:border-emerald-200 hover:bg-gray-50'
+                              }`}
+                            >
+                              <span className="text-2xl">{item.emoji}</span>
+                              <span className="text-sm font-medium">{item.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="mb-8">
+                        <label className="block text-sm font-semibold text-gray-700 mb-3">Бюджет на прогулку</label>
+                        <div className="flex flex-wrap gap-3">
+                          {demoBudgets.map(item => (
+                            <button
+                              key={item.id}
+                              onClick={() => setDemoParams({...demoParams, budget: item.id})}
+                              className={`px-6 py-3 rounded-xl border-2 font-semibold transition-all ${
+                                demoParams.budget === item.id 
+                                  ? item.color + ' border-current ring-2 ring-offset-1 ring-emerald-200' 
+                                  : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                              }`}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={startDemoGeneration}
+                        className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-lg rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg shadow-emerald-200 hover:shadow-xl active:scale-[0.98]"
+                      >
+                        Построить маршрут ✨
+                      </button>
+                    </div>
+                  )}
+
+                  {demoStep === 'loading' && (
+                    <div className="p-10 sm:p-20 flex flex-col items-center justify-center text-center animate-slide-up">
+                      <div className="relative w-24 h-24 mb-6">
+                        <div className="absolute inset-0 border-4 border-emerald-100 rounded-full"></div>
+                        <div className="absolute inset-0 border-4 border-emerald-500 rounded-full border-t-transparent animate-spin"></div>
+                        <span className="absolute inset-0 flex items-center justify-center text-3xl">🗺️</span>
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-800 mb-2">Алгоритм работает...</h3>
+                      <p className="text-emerald-600 font-medium animate-pulse min-h-[1.5em]">{loadingText}</p>
+                    </div>
+                  )}
+
+                  {demoStep === 'result' && demoResult && (
+                    <div className="animate-slide-up">
+                      <div className="bg-gradient-to-br from-emerald-600 to-teal-600 p-6 sm:p-8 text-white">
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
+                          <div>
+                            <span className="inline-block px-3 py-1 bg-white/20 rounded-full text-xs font-semibold mb-2 backdrop-blur-sm">Готовый маршрут</span>
+                            <h3 className="text-2xl sm:text-3xl font-bold">{demoResult.title}</h3>
+                          </div>
+                          <button onClick={resetDemo} className="text-white/80 hover:text-white text-sm underline whitespace-nowrap">Изменить параметры</button>
+                        </div>
+                        <div className="flex flex-wrap gap-3 text-sm font-medium">
+                          <span className="flex items-center gap-1 bg-white/20 px-3 py-1.5 rounded-lg backdrop-blur-sm">⏱️ {demoParams.duration}</span>
+                          <span className="flex items-center gap-1 bg-white/20 px-3 py-1.5 rounded-lg backdrop-blur-sm">🚶 {demoResult.distance}</span>
+                          <span className="flex items-center gap-1 bg-white/20 px-3 py-1.5 rounded-lg backdrop-blur-sm">💰 {demoResult.saved}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="p-6 sm:p-8">
+                        <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                          <span>📍</span> Точки маршрута
+                        </h4>
+                        <div className="space-y-4">
+                          {demoResult.points.map((point, idx) => (
+                            <div key={idx} className="flex gap-4 group">
+                              <div className="flex flex-col items-center">
+                                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm font-bold group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                                  {idx + 1}
+                                </div>
+                                {idx < demoResult.points.length - 1 && <div className="w-0.5 flex-1 bg-gray-200 my-1 group-hover:bg-emerald-200 transition-colors"></div>}
+                              </div>
+                              <div className="pb-6">
+                                <div className="font-bold text-gray-800 flex items-center gap-2">
+                                  <span>{point.emoji}</span> {point.name}
+                                </div>
+                                <p className="text-sm text-gray-600 mt-1">{point.desc}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="mt-6 p-4 bg-amber-50 border border-amber-100 rounded-xl flex items-start gap-3">
+                          <span className="text-2xl">💡</span>
+                          <div>
+                            <p className="font-semibold text-amber-800 text-sm">Совет от алгоритма</p>
+                            <p className="text-sm text-amber-700 mt-1">{demoResult.tip}</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-8 flex flex-col sm:flex-row gap-4">
+                          <a href="#form" className="flex-1 py-3.5 bg-gray-900 text-white font-bold text-center rounded-xl hover:bg-gray-800 transition-colors">
+                            Получить такой же для моего города 🚀
+                          </a>
+                          <button className="flex-1 py-3.5 border-2 border-gray-200 text-gray-700 font-bold rounded-xl hover:border-emerald-300 hover:text-emerald-700 transition-colors flex items-center justify-center gap-2">
+                            <span>📥</span> Скачать PDF
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {/* БЛОК «КАК ЭТО РАБОТАЕТ» */}
+            <section id="how" className="py-20 sm:py-28 bg-white">
+              <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="text-center mb-16">
+                  <span className="text-sm font-semibold text-emerald-600 uppercase tracking-wider">Просто как 1-2-3</span>
+                  <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-4">Как это работает</h2>
+                  <p className="text-gray-600 text-lg max-w-2xl mx-auto">Три простых шага от идеи до прогулки мечты</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12">
+                  {steps.map((s, i) => (
+                    <div key={i} className="relative">
+                      {i < steps.length - 1 && (
+                        <div className="hidden md:block absolute top-16 left-[60%] w-[80%] h-0.5 bg-gradient-to-r from-emerald-200 to-transparent" />
+                      )}
+                      <div className="relative bg-white p-8 rounded-3xl border border-gray-100 shadow-lg shadow-gray-100/50 hover:shadow-xl hover:border-emerald-200 transition-all duration-300">
+                        <div className="absolute -top-4 -left-2 text-6xl font-black text-emerald-100 select-none">
+                          {s.num}
+                        </div>
+                        <span className="text-5xl mb-6 block relative z-10">{s.emoji}</span>
+                        <h3 className="text-xl font-bold mb-3 relative z-10">{s.title}</h3>
+                        <p className="text-gray-600 leading-relaxed">{s.text}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            {/* БЛОК «ПРОБЛЕМЫ» */}
+            <section id="problems" className="py-20 sm:py-28 bg-gray-50">
+              <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="text-center mb-16">
+                  <span className="text-sm font-semibold text-emerald-600 uppercase tracking-wider">Знакомо?</span>
+                  <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-4">Планирование прогулки — <span className="text-red-500">это боль</span></h2>
+                  <p className="text-gray-600 text-lg max-w-2xl mx-auto">Каждый раз одно и то же. Часы на исследования, а результат всё равно не идеальный.</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {problems.map((p, i) => (
+                    <article key={i} className="group p-6 rounded-2xl bg-white border border-gray-100 hover:bg-white hover:border-emerald-200 hover:shadow-xl hover:shadow-emerald-50 transition-all duration-300 hover:-translate-y-1">
+                      <span className="text-4xl mb-4 block group-hover:scale-110 transition-transform">{p.emoji}</span>
+                      <h3 className="font-bold text-lg mb-2">{p.title}</h3>
+                      <p className="text-gray-600 text-sm leading-relaxed">{p.text}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            {/* ФОРМА ЗАХВАТА ЛИДОВ */}
+            <section id="form" className="py-20 sm:py-28 bg-gradient-to-br from-emerald-50 via-teal-50 to-amber-50">
+              <div className="max-w-2xl mx-auto px-4 sm:px-6">
+                <div className="text-center mb-12">
+                  <span className="text-sm font-semibold text-emerald-600 uppercase tracking-wider">Присоединяйтесь</span>
+                  <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-3 mb-4">Получите ранний доступ</h2>
+                  <p className="text-gray-600 text-lg">Оставьте контакты — мы сообщим о запуске первыми и подарим бонус 🎁</p>
+                </div>
+
+                {!isSubmitted ? (
+                  <form onSubmit={handleSubmit} className="bg-white rounded-3xl p-6 sm:p-10 shadow-xl shadow-emerald-100/50 border border-emerald-100" noValidate>
+                    <div className="mb-6">
+                      <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">Как вас зовут? 👋</label>
+                      <input type="text" id="name" name="name" value={formData.name} onChange={handleChange} placeholder="Ваше имя" className={`w-full px-4 py-3 rounded-xl border ${errors.name ? 'border-red-300 bg-red-50' : 'border-gray-200'} focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all`} />
+                      {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
+                    </div>
+
+                    <div className="mb-6">
+                      <label htmlFor="contact" className="block text-sm font-semibold text-gray-700 mb-2">Email или Telegram 📬</label>
+                      <input type="text" id="contact" name="contact" value={formData.contact} onChange={handleChange} placeholder="email@example.com или @username" className={`w-full px-4 py-3 rounded-xl border ${errors.contact ? 'border-red-300 bg-red-50' : 'border-gray-200'} focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all`} />
+                      {errors.contact && <p className="mt-1 text-sm text-red-500">{errors.contact}</p>}
+                    </div>
+
+                    <div className="mb-8">
+                      <label htmlFor="city" className="block text-sm font-semibold text-gray-700 mb-2">Ваш город 🏙️</label>
+                      <select id="city" name="city" value={formData.city} onChange={handleChange} className={`w-full px-4 py-3 rounded-xl border ${errors.city ? 'border-red-300 bg-red-50' : 'border-gray-200'} focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all bg-white`}>
+                        <option value="">Выберите город</option>
+                        <option>Ростов-на-Дону</option>
+                        <option>Москва</option>
+                        <option>Санкт-Петербург</option>
+                        <option>Другой город</option>
+                      </select>
+                      {errors.city && <p className="mt-1 text-sm text-red-500">{errors.city}</p>}
+                    </div>
+
+                    <button type="submit" className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-lg rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg shadow-emerald-200 active:scale-[0.98]">
+                      Получить ранний доступ 🚀
+                    </button>
+                    <p className="mt-4 text-center text-xs text-gray-400">Нажимая кнопку, вы соглашаетесь на обработку персональных данных</p>
+                  </form>
+                ) : (
+                  <div className="bg-white rounded-3xl p-10 shadow-xl shadow-emerald-100/50 border border-emerald-100 text-center animate-slide-up">
+                    <div className="text-6xl mb-6">🎉</div>
+                    <h3 className="text-2xl sm:text-3xl font-bold mb-4">Спасибо, {formData.name}!</h3>
+                    <p className="text-gray-600 text-lg mb-6">Вы в списке! Мы сообщим вам о запуске первыми.</p>
+                    <div className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-50 rounded-full text-emerald-700 font-medium">
+                      <span>🌿</span><span>Городские тропы — скоро!</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* ФУТЕР */}
+            <footer className="bg-gray-900 text-white py-16">
+              <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-12">
+                  <div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="text-2xl">🌿</span>
+                      <span className="font-bold text-lg">Городские тропы</span>
+                    </div>
+                    <p className="text-gray-400 text-sm leading-relaxed">Цифровая платформа для создания персональных городских маршрутов. Откройте свой город по-новому.</p>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold mb-4">Навигация</h4>
+                    <div className="flex flex-col gap-2">
+                      <a href="#demo" className="text-gray-400 hover:text-emerald-400 transition-colors text-sm">Демо-режим</a>
+                      <a href="#how" className="text-gray-400 hover:text-emerald-400 transition-colors text-sm">Как это работает</a>
+                      <a href="#problems" className="text-gray-400 hover:text-emerald-400 transition-colors text-sm">Проблемы</a>
+                      <a href="#form" className="text-gray-400 hover:text-emerald-400 transition-colors text-sm">Ранний доступ</a>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold mb-4">Контакты</h4>
+                    <div className="flex flex-col gap-2">
+                      <a href="mailto:lykov070807@gmail.com" className="text-gray-400 hover:text-emerald-400 transition-colors text-sm">📧 lykov070807@gmail.com</a>
+                      <a href="https://t.me/Warden678" className="text-gray-400 hover:text-emerald-400 transition-colors text-sm">💬 @Warden678</a>
+                      <span className="text-gray-400 text-sm">📍 Ростов-на-Дону</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="border-t border-gray-800 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <p className="text-gray-500 text-sm">© 2026 Городские тропы. Все права защищены.</p>
+                  <p className="text-gray-500 text-sm">Сделано с 💚 для городских исследователей</p>
+                </div>
+              </div>
+            </footer>
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
